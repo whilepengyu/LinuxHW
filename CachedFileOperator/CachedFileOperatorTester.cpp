@@ -70,57 +70,58 @@ void testFileOperations() {
     double totalUncachedWriteTime = 0.0;
     double totalCachedReadTime = 0.0;
     double totalUncachedReadTime = 0.0;
-    
+
     for (int i = 0; i < NUM_OPERATIONS; ++i) {
         char* dataToWrite = new char[DATA_SIZE];
-        fillRandomData(dataToWrite, DATA_SIZE); // 填充随机字母
+        fillRandomData(dataToWrite, DATA_SIZE);
 
         // 带缓存写
         cfo->lseek(0, SEEK_SET);
         auto startWriteCached = std::chrono::high_resolution_clock::now();
         cfo->write(dataToWrite, DATA_SIZE);
         auto endWriteCached = std::chrono::high_resolution_clock::now();
-        totalCachedWriteTime += std::chrono::duration<double>(endWriteCached - startWriteCached).count(); // 确保以秒为单位
+        totalCachedWriteTime += std::chrono::duration<double>(endWriteCached - startWriteCached).count();
 
         // 不带缓存写
         lseek(fd, 0, SEEK_SET);
         auto startWriteUncached = std::chrono::high_resolution_clock::now();
         write(fd, dataToWrite, DATA_SIZE);
         auto endWriteUncached = std::chrono::high_resolution_clock::now();
-        totalUncachedWriteTime += std::chrono::duration<double>(endWriteUncached - startWriteUncached).count(); // 确保以秒为单位
+        totalUncachedWriteTime += std::chrono::duration<double>(endWriteUncached - startWriteUncached).count();
 
         delete[] dataToWrite;
 
-        // 带缓存读
-        char cachedBuffer[11] = {0};
-        cfo->lseek(0, SEEK_SET); 
-        auto startReadCached = std::chrono::high_resolution_clock::now();
-        cfo->read(cachedBuffer, 10);
-        auto endReadCached = std::chrono::high_resolution_clock::now();
-        totalCachedReadTime += std::chrono::duration<double>(endReadCached - startReadCached).count(); // 确保以秒为单位
+        // 模拟频繁读取
+        for (int j = 0; j < 5; ++j) { // 重复读取相同的数据块
+            char cachedBuffer[11] = {0};
+            cfo->lseek(0, SEEK_SET);
+            auto startReadCached = std::chrono::high_resolution_clock::now();
+            cfo->read(cachedBuffer, 10);
+            auto endReadCached = std::chrono::high_resolution_clock::now();
+            totalCachedReadTime += std::chrono::duration<double>(endReadCached - startReadCached).count();
 
-        // 不带缓存读
-        char uncachedBuffer[11] = {0};
-        lseek(fd, 0, SEEK_SET); 
-        auto startReadUncached = std::chrono::high_resolution_clock::now();
-        read(fd, uncachedBuffer, 10);
-        auto endReadUncached = std::chrono::high_resolution_clock::now();
-        totalUncachedReadTime += std::chrono::duration<double>(endReadUncached - startReadUncached).count(); // 确保以秒为单位
+            // 不带缓存读
+            char uncachedBuffer[11] = {0};
+            lseek(fd, 0, SEEK_SET);
+            auto startReadUncached = std::chrono::high_resolution_clock::now();
+            read(fd, uncachedBuffer, 10);
+            auto endReadUncached = std::chrono::high_resolution_clock::now();
+            totalUncachedReadTime += std::chrono::duration<double>(endReadUncached - startReadUncached).count();
 
-        bool contentsAreEqual = (memcmp(cachedBuffer, uncachedBuffer, 10) == 0);
+            bool contentsAreEqual = (memcmp(cachedBuffer, uncachedBuffer, 10) == 0);
 
-        if (contentsAreEqual) {
-            std::cout << "Contents are consistent between cached and uncached files after operation " << (i + 1) << "." << std::endl;
-        } 
-        else {
-            std::cout << "Contents are inconsistent between cached and uncached files after operation " << (i + 1) << "!" << std::endl;
+            if (contentsAreEqual) {
+                std::cout << "Contents are consistent between cached and uncached files after operation " << (i + 1) << "." << std::endl;
+            } else {
+                std::cout << "Contents are inconsistent between cached and uncached files after operation " << (i + 1) << "!" << std::endl;
+            }
+
+            // 输出读取到的内容
+            //std::cout << "Cached Read Content: " << cachedBuffer << std::endl;
+            //std::cout << "Uncached Read Content: " << uncachedBuffer << std::endl;
         }
-
-        // 输出读取到的内容
-        std::cout << "Cached Read Content: " << cachedBuffer << std::endl;
-        std::cout << "Uncached Read Content: " << uncachedBuffer << std::endl;
     }
-
+    
     // 设置输出格式为固定小数点格式，并保留6位小数
     std::cout << std::fixed << std::setprecision(6);
     std::cout << "Total cached write time: " << totalCachedWriteTime << " seconds" << std::endl;
