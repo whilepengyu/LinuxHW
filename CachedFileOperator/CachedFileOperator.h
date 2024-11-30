@@ -19,9 +19,9 @@ typedef struct BlcokInfo{
 
 class CachedFileOperator {
 public:
-    static const size_t CACHE_BUFFER_SIZE = 1024 * 1024; // 缓存大小：1MB
-    static const size_t BLOCK_SIZE = 1024; // 块大小：1KB
-    static const size_t CACHE_MAX_BLOCK = 1024; //1024个块
+    static const size_t CACHE_BUFFER_SIZE = 64 * 1024 * 1024; // 缓存大小：64MB
+    static const size_t BLOCK_SIZE =  1024 * 1024; // 块大小：1KB
+    static const size_t CACHE_MAX_BLOCK = 64; //1024个块
 public:
     static CachedFileOperator* getInstance(); // 单例模式
 

@@ -75,7 +75,7 @@ CachedFileOperator* CachedFileOperator::getInstance() {
 }
 
 void CachedFileOperator::open(const std::string& fileName) { // 按文件名打开文件
-    m_fd = ::open(fileName.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    m_fd = ::open(fileName.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_DIRECT);
     if (m_fd == -1) {
         throw std::runtime_error("Failed to open file: " + fileName);
     }
@@ -182,7 +182,7 @@ void CachedFileOperator::writeCache(size_t blockIndex, const char* dataBlock, si
         size_t oldestBlock = m_accessOrder.back(); // 获取最旧的块索引
         offset = m_cache[oldestBlock].cacheBufferOffset;
         lseek(offset, SEEK_SET);
-        ::write(m_fd, p_cacheBuffer.get() + offset, m_cache[oldestBlock].blockValidSize);         
+        ::write(m_fd, p_cacheBuffer.get() + offset, m_cache[oldestBlock].blockValidSize);
 
         m_cache.erase(oldestBlock); // 从缓存中移除该块
         m_accessOrder.pop_back(); // 更新访问顺序，移除最旧的块
