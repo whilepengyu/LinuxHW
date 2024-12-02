@@ -12,16 +12,17 @@
 #include <iostream>
 #include <csignal> 
 
-typedef struct BlcokInfo{
-    size_t cacheBufferOffset;
-    size_t blockValidSize;
-}BlcokInfo;
+typedef struct BlockInfo{
+    size_t cacheBufferOffset; //该块在缓存区中的偏移量
+    size_t blockValidSize; //该块数据的有效大小
+    std::list<size_t>::iterator accessOrderIterator; //该块在访问队列中的迭代器
+}BlockInfo;
 
 class CachedFileOperator {
 public:
-    static const size_t CACHE_BUFFER_SIZE = 1024 * 1024; // 缓存大小：1MB
-    static const size_t BLOCK_SIZE = 1024; // 块大小：1KB
-    static const size_t CACHE_MAX_BLOCK = 1024; //1024个块
+    static const size_t CACHE_BUFFER_SIZE = 64 * 1024 * 1024; // 缓存大小：64MB
+    static const size_t BLOCK_SIZE =  64 * 1024; // 块大小：64KB
+    static const size_t CACHE_MAX_BLOCK = 1 * 1024; //1024个块
 public:
     static CachedFileOperator* getInstance(); // 单例模式
 
@@ -43,7 +44,7 @@ private:
     char* readCache(size_t blockIndex); //读缓存
     std::unique_ptr<char[]> p_cacheBuffer; // 缓存缓冲区
 
-    std::unordered_map<size_t, BlcokInfo> m_cache; // 缓存哈希表 (块号 -> (缓冲区偏移量, 块有效大小))
+    std::unordered_map<size_t, BlockInfo> m_cache; // 缓存哈希表 (块号 -> (缓冲区偏移量, 块有效大小, 块在访问队列中的迭代器))
     std::list<size_t> m_accessOrder; // 访问顺序
     
     int m_fd; // 文件描述符

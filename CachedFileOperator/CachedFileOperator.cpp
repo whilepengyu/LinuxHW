@@ -2,7 +2,7 @@
 
 CachedFileOperator* CachedFileOperator::m_CFO = nullptr;
 
-CachedFileOperator::CachedFileOperator() 
+CachedFileOperator::CachedFileOperator()
     : p_cacheBuffer(new char[CACHE_BUFFER_SIZE]), m_cache(CACHE_MAX_BLOCK), m_fd(-1) {
 }
 
@@ -75,7 +75,7 @@ CachedFileOperator* CachedFileOperator::getInstance() {
 }
 
 void CachedFileOperator::open(const std::string& fileName) { // 按文件名打开文件
-    m_fd = ::open(fileName.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    m_fd = ::open(fileName.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | O_DIRECT);
     if (m_fd == -1) {
         throw std::runtime_error("Failed to open file: " + fileName);
     }
@@ -85,7 +85,7 @@ void CachedFileOperator::lseek(size_t offset, int whence) { //按指定方式获
     if(m_fd == -1){
         throw std::runtime_error("In lseek(): File not specified");
     }
-    m_pos = ::lseek(m_fd, offset, whence);
+    m_pos = ::lseek(m_fd, offset, whence); //保存文件当前偏移量
     if (m_pos == -1) {
         throw std::runtime_error("Failed to seek in file");
     }
@@ -107,7 +107,7 @@ void CachedFileOperator::read(char* buffer, size_t size) {
     size_t blockIndex = fileOffset / BLOCK_SIZE;
     size_t blockOffset = fileOffset % BLOCK_SIZE;
     if(blockOffset != 0){
-        // 将需要的部分复制到buffer中
+        // 将第一块需要的部分复制到buffer中
         size_t firstBlockSize = std::min(size, BLOCK_SIZE - blockOffset);
         memcpy(buffer + bufferOffset, readCache(blockIndex) + blockOffset, firstBlockSize);
         blockIndex++;
@@ -144,7 +144,7 @@ void CachedFileOperator::write(const char* data, size_t size) {
     if(blockOffset != 0){
         // 把数据写入到第一个块中需要写到的地方
         size_t firstBlockSize = std::min(size, BLOCK_SIZE - blockOffset);
-        readCache(blockIndex); // 确保块没有左空缺
+        readCache(blockIndex); // 确保缓存块没有左空缺
         writeCache(blockIndex, data + dataOffset, firstBlockSize, blockOffset);
         blockIndex++;
         dataOffset += firstBlockSize;
@@ -166,41 +166,46 @@ void CachedFileOperator::write(const char* data, size_t size) {
 void CachedFileOperator::writeCache(size_t blockIndex, const char* dataBlock, size_t dataSize, size_t blockOffset) {
     size_t offset;
     auto it = m_cache.find(blockIndex);
+    
     // 如果缓存中已有对应的块, 则直接修改缓存
-    if(it != m_cache.end()){
-        offset = m_cache[blockIndex].cacheBufferOffset;
-        m_cache[blockIndex].blockValidSize = std::max(m_cache[blockIndex].blockValidSize, blockOffset + dataSize);
-        // 将新数据放入缓存
+    if (it != m_cache.end()) {
+        offset = it->second.cacheBufferOffset;
+        it->second.blockValidSize = std::max(it->second.blockValidSize, blockOffset + dataSize);
         memcpy(p_cacheBuffer.get() + offset + blockOffset, dataBlock, dataSize);
-        // m_accessOrder.remove(blockIndex);
-        // m_accessOrder.push_front(blockIndex);
+
+        // 更新访问顺序
+        m_accessOrder.erase(it->second.accessOrderIterator); // 移除旧的访问顺序
+        it->second.accessOrderIterator = m_accessOrder.insert(m_accessOrder.begin(), blockIndex); // 插入到头部
         return;
     }
-    // 如果缓存没有对应的块
     
+    // 如果缓存没有对应的块
     if (m_cache.size() >= CACHE_MAX_BLOCK) { // 如果缓存已满，移除最久未使用的块
         size_t oldestBlock = m_accessOrder.back(); // 获取最旧的块索引
         offset = m_cache[oldestBlock].cacheBufferOffset;
         lseek(offset, SEEK_SET);
-        ::write(m_fd, p_cacheBuffer.get() + offset, m_cache[oldestBlock].blockValidSize);         
-
+        ::write(m_fd, p_cacheBuffer.get() + offset, m_cache[oldestBlock].blockValidSize);
+        
         m_cache.erase(oldestBlock); // 从缓存中移除该块
         m_accessOrder.pop_back(); // 更新访问顺序，移除最旧的块
-    }
-    else {// 如果是新块，计算新的偏移量
+    } else { // 如果是缓存未满，计算偏移量
         offset = (m_cache.size() * BLOCK_SIZE); 
     }
-    // 将新数据放入缓存
-    if(blockOffset != 0){
-        readCache(blockIndex); //填满左空缺
-    }
-    memcpy(p_cacheBuffer.get() + offset + blockOffset, dataBlock, dataSize);
-    // 更新缓存映射
-    m_cache[blockIndex].cacheBufferOffset = offset;
-    m_cache[blockIndex].blockValidSize = blockOffset + dataSize;
 
-    // 更新访问顺序
-    m_accessOrder.push_front(blockIndex); 
+    // 将新数据放入缓存
+    if (blockOffset != 0) {
+        readCache(blockIndex); // 填满左空缺
+    }
+    
+    memcpy(p_cacheBuffer.get() + offset + blockOffset, dataBlock, dataSize);
+    
+    // 更新缓存映射和访问顺序
+    BlockInfo newBlockInfo;
+    newBlockInfo.cacheBufferOffset = offset;
+    newBlockInfo.blockValidSize = blockOffset + dataSize;
+    newBlockInfo.accessOrderIterator = m_accessOrder.insert(m_accessOrder.begin(), blockIndex); // 插入到头部
+    
+    m_cache[blockIndex] = newBlockInfo; // 添加到缓存中
 }
 
 char* CachedFileOperator::readCache(size_t blockIndex) {
@@ -208,26 +213,30 @@ char* CachedFileOperator::readCache(size_t blockIndex) {
     
     if (it != m_cache.end()) { // 如果已在缓存中，更新块的值
         size_t offset = it->second.cacheBufferOffset;
-        if(it->second.blockValidSize < BLOCK_SIZE){
+        
+        if (it->second.blockValidSize < BLOCK_SIZE) {
             ssize_t readBytes = ::read(m_fd, p_cacheBuffer.get() + offset, BLOCK_SIZE);
-            if(readBytes == -1){
+            if (readBytes == -1) {
                 throw std::runtime_error("Failed to read");
             }
-            if(readBytes != 0)
+            if (readBytes != 0)
                 it->second.blockValidSize = readBytes;
         }
+
         // 更新访问顺序
-        m_accessOrder.remove(blockIndex);
-        m_accessOrder.push_front(blockIndex);
+        m_accessOrder.erase(it->second.accessOrderIterator); // 移除旧的访问顺序
+        it->second.accessOrderIterator = m_accessOrder.insert(m_accessOrder.begin(), blockIndex); // 插入到头部
+        
         return p_cacheBuffer.get() + offset; // 返回缓存数据
+    } 
+    // 如果不在缓存中，从文件读取一整块
+    std::unique_ptr<char[]> buf(new char[BLOCK_SIZE]); 
+    ssize_t readBytes = ::read(m_fd, buf.get(), BLOCK_SIZE);
+    
+    if (readBytes == -1) {
+        throw std::runtime_error("Failed to read");
     }
-    else{
-        std::unique_ptr<char[]> buf(new char[BLOCK_SIZE]); // 缓存中没有，则从文件中读取
-        ssize_t readBytes = ::read(m_fd, buf.get(), BLOCK_SIZE); //不管请求读多少，总是尝试从文件中读一个块的大小
-        if(readBytes == -1){
-            throw std::runtime_error("Failed to read");
-        }
-        writeCache(blockIndex, buf.get(), readBytes, 0); // 写入缓存
-        return p_cacheBuffer.get() + m_cache[blockIndex].cacheBufferOffset;
-    }
+    
+    writeCache(blockIndex, buf.get(), readBytes, 0); // 将读取的数据写入缓存中
+    return p_cacheBuffer.get() + m_cache[blockIndex].cacheBufferOffset;
 }
