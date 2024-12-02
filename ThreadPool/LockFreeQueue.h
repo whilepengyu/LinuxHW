@@ -2,21 +2,30 @@
 #define LOCKFREEQUEUE_H
 
 #include <atomic>
-#include <vector>
+#include <iostream>
 
+// 节点结构
+template<typename T>
+struct Node {
+    T data;
+    Node* next;
+    Node(T value) : data(value), next(nullptr) {}
+};
+
+// 无锁队列类
 template<typename T>
 class LockFreeQueue {
 public:
-    LockFreeQueue(size_t capacity);
-    bool enqueue(const T& value);
-    bool dequeue(T& result);
+    LockFreeQueue(); // 构造函数
+    ~LockFreeQueue(); // 析构函数
+    void enqueue(T value); // 入队操作
+    bool dequeue(T& result); // 出队操作
 
 private:
-    std::vector<T> buffer;
-    const size_t capacity;
-    std::atomic<size_t> head, tail;
+    std::atomic<Node<T>*> head; // 队首指针
+    std::atomic<Node<T>*> tail; // 队尾指针
 };
 
-#include "LockFreeQueue.tpp" // 包含实现，避免模板类定义问题
+#include "LockFreeQueue.cpp" // 包含实现文件
 
 #endif // LOCKFREEQUEUE_H

@@ -1,58 +1,35 @@
 #include "ThreadPool.h"
-#include <fstream>
-#include <algorithm>
 
-ThreadPool::ThreadPool(size_t threads)
-    : taskQueue(1024) { // 设置任务队列容量
+// 构造函数
+ThreadPool::ThreadPool(size_t threads) {
     for (size_t i = 0; i < threads; ++i) {
-        workers.emplace_back(&ThreadPool::worker, this);
+        workers.emplace_back(&ThreadPool::worker, this); // 创建工作线程并启动
     }
 }
 
-ThreadPool::~ThreadPool() {
-    stop.store(true, std::memory_order_release);
-    for (auto& worker : workers) {
-        worker.join();
-    }
-}
-
-void ThreadPool::enqueue(const std::string& filename) {
-    while (!taskQueue.enqueue(filename)) {
-        std::this_thread::yield(); // 如果队列满了，可以选择等待或丢弃任务
-    }
-}
-
+// 工作线程执行的函数
 void ThreadPool::worker() {
-    while (!stop.load(std::memory_order_acquire)) {
-        std::string filename;
-        if (taskQueue.dequeue(filename)) {
-            // 处理文件排序
-            sortAndWrite(filename);
+    while (!stop.load()) { // 检查是否需要停止
+        Task task;
+        if (taskQueue.dequeue(task)) { // 从队列中取出任务
+            task.func(); // 执行任务
         } else {
-            std::this_thread::yield(); // 队列为空时让出CPU
+            std::this_thread::yield(); // 如果队列为空，放弃当前时间片，避免忙等待
         }
     }
 }
 
-void sortAndWrite(const std::string& filename) {
-    // 读取文件数据
-    std::ifstream file(filename);
-    std::vector<int64_t> data;
+// 将任务添加到任务队列
+void ThreadPool::enqueue(Task task) {
+    taskQueue.enqueue(task); // 将任务加入无锁队列
+}
 
-    int64_t number;
-    while (file >> number) {
-        data.push_back(number);
-        if (data.size() * sizeof(int64_t) >= 64 * 1024 * 1024) { // 内存限制为64MB
-            break; // 超过限制则停止读取
+// 析构函数
+ThreadPool::~ThreadPool() {
+    stop.store(true); // 设置停止标志
+    for (std::thread &worker : workers) {
+        if (worker.joinable()) {
+            worker.join(); // 等待所有工作线程完成
         }
-    }
-
-    // 排序
-    std::sort(data.begin(), data.end());
-
-    // 写入临时文件
-    std::ofstream outFile(filename + ".sorted");
-    for (const auto& num : data) {
-        outFile << num << "\n";
     }
 }
