@@ -9,6 +9,13 @@ void Heap::push(long long value) {
     heapifyUp(data.size() - 1); // 调整堆以保持堆性质
 }
 
+long long Heap::top() {
+    if (data.empty()) {
+        throw std::out_of_range("Heap is empty");
+    }
+    return data[0];                     // 返回根节点的值（即最小值）
+}
+
 long long Heap::pop() {
     if (data.empty()) {
         throw std::out_of_range("Heap is empty");
@@ -25,7 +32,7 @@ long long Heap::pop() {
 void Heap::heapifyUp(int index) {
     while (index > 0) {
         int parentIndex = (index - 1) / 2;
-        if (data[index] > data[parentIndex]) {
+        if (data[index] < data[parentIndex]) {
             std::swap(data[index], data[parentIndex]);
             index = parentIndex;
         } else {
@@ -40,31 +47,24 @@ void Heap::heapifyDown(int index) {
     while (index < size) {
         int leftChild = 2 * index + 1;
         int rightChild = 2 * index + 2;
-        int largest = index;
-
-        if (leftChild < size && data[leftChild] > data[largest]) {
-            largest = leftChild;
+        int smallest = index;
+        if (leftChild < size && data[leftChild] < data[smallest]) {
+            smallest = leftChild;
         }
         
-        if (rightChild < size && data[rightChild] > data[largest]) {
-            largest = rightChild;
+        if (rightChild < size && data[rightChild] < data[smallest]) {
+            smallest = rightChild;
         }
 
-        if (largest != index) {
-            std::swap(data[index], data[largest]);
-            index = largest;
+        if (smallest != index) {
+            std::swap(data[index], data[smallest]);
+            index = smallest;
         } else {
             break;
         }
     }
 }
 
-void Heap::heapSort() {
-    std::vector<long long> sortedData;
-    
-    while (!data.empty()) {
-        sortedData.push_back(pop());
-    }
-    
-    data = sortedData; // 将排序后的数据放回原堆中
+bool Heap::empty() const {
+    return data.empty();                // 检查数据向量是否为空
 }

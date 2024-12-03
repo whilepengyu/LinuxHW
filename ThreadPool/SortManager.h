@@ -9,35 +9,34 @@
 #include <functional>
 #include "ThreadPool.h"
 #include "Heap.h"
-#include "LockFreeQueue.h"
+#include "LockFreeQueue.hpp"
 #include <filesystem>
 namespace fs = std::filesystem;
 
 class SortManager {
-private:
-    struct Task {
-        std::function<void()> func; // 使用 std::function 来存储可调用对象
-    };
-
 public:
-    SortManager(const std::string& dir, int numThread, size_t bufferSize, size_t totalDataSize);
-
+    SortManager(const std::string& dir, size_t numThread, size_t bufferSize);
+    void Run();
 private:
     ThreadPool pool; // 线程池
-    std::vector<std::unique_ptr<Heap>> heaps; // 每个线程的堆
+    size_t numThread;
     std::shared_ptr<long long[]> buffer; // 数据缓冲区
-    LockFreeQueue<size_t> availableBlocks; // 用无锁队列存储可用块在buffer中的位置
+    LockFreeQueue<size_t> availableBlocks; // 用无锁队列存储 可用块在buffer中的索引
+    LockFreeQueue<size_t> unavailableBlocks; // 用无锁队列存储 不可用块在buffer中的索引
     size_t bufferSize; // buffer大小
     size_t blockSize; // 每个块的大小
 
-    void ReadOneBlockFromFiles(); // 从文件中读取一个块的数据
-    void ReadToHeap(); // 从文件读取数据到堆
-    void mergeHeaps(); // 将所有线程的堆合并成一个有序的中间文件
-    void mergeIntermediate(); // 将中间文件合并
+    //Tasks
+    void ReadOneBlockToCache(); // 从文件中读数据到缓存
+    void ReadToHeap(size_t i); // 把缓存数据读到堆中
+    void MergeHeaps(); // 将所有线程的堆合并成一个有序的中间文件
+    void MergeIntermediate(); // 将中间文件合并
     
     fs::directory_iterator dirIter;
     fs::directory_iterator dirEndIter;
     std::ifstream fileStream;
+
+    size_t intermediateCount;
 };
 
 #endif // SORTMANAGER_H

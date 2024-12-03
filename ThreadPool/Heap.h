@@ -9,8 +9,9 @@ class Heap {
 public:
     Heap();
     void push(long long value);  // 向堆中添加元素
-    long long pop();             // 从堆中移除并返回最大元素
-    void heapSort();             // 堆排序
+    long long top();             // 返回堆顶元素
+    long long pop();             // 从堆中移除并返回最小元素
+    bool empty() const;          // 检查堆是否为空
     
 private:
     std::vector<long long> data; // 存储堆的数组

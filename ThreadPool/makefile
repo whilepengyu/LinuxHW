@@ -1,8 +1,8 @@
 CXX = g++
 CXXFLAGS = -Wall -g
 
-SOURCES = $(wildcard *.cpp)
-EXECUTABLE = myls
+SOURCES = $(wildcard *.cpp) $(wildcard *.hpp)
+EXECUTABLE = sort.out
 
 all: $(EXECUTABLE)
 
