@@ -3,20 +3,21 @@
 // 构造函数
 ThreadPool::ThreadPool(size_t threads) {
     for (size_t i = 0; i < threads; ++i) {
-         workers.emplace_back([this, i]() { this->workerRun(i); }); // 创建工作线程并启动
+        workers.emplace_back([this]() { this->workerRun(); }); // 创建工作线程并启动
+        heaps.push_back(Heap());
     }
 }
 
-void ThreadPool::addTask(std::function<void(size_t)> func){
+void ThreadPool::addTask(std::function<void()> func){
     taskQueue.enqueue(func);
 }
 
 // 工作线程执行的函数
-void ThreadPool::workerRun(size_t i) {
+void ThreadPool::workerRun() {
     while (!stop.load()) { // 检查是否需要停止
-        std::function<void(size_t)> func;
+        std::function<void()> func;
         if (taskQueue.dequeue(func)) { // 从队列中取出任务
-            func(i); // 执行任务
+            func(); // 执行任务
         } else {
             std::this_thread::yield(); // 如果队列为空，放弃当前时间片，避免忙等待
         }
@@ -33,10 +34,10 @@ ThreadPool::~ThreadPool() {
     }
 }
 
-bool ThreadPool::ifstop(){
-    return stop;
+bool ThreadPool::ifStop(){
+    return stop.load();
 }
 
-ThreadWithHeap& ThreadPool::getThread(size_t i){
+std::thread& ThreadPool::getThread(size_t i){
     return workers[i];
 }

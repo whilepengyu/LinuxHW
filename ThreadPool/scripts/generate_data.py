@@ -12,13 +12,13 @@ def write_file(file_path, data):
         for number in data:
             f.write(struct.pack('q', number))  # 'q'表示64位有符号整数
 
-def generate_file_sizes(total_size_gb, total_files):
+def generate_file_sizes(total_size, total_files):
     """生成文件大小数组，确保总大小为目标值且每个文件大小不一样"""
-    base_size_kb = 10  # 每个文件初始为10KB
+    base_size_kb = 16  # 每个文件初始为16KB
     sizes = [base_size_kb * 1024 for _ in range(total_files)]  # 初始化为10KB
 
     # 计算目标总字节数
-    target_size_bytes = total_size_gb * (1024 ** 3)
+    target_size_bytes = total_size
     
     # 随机调整每个文件的大小
     current_total_size = sum(sizes)
@@ -30,24 +30,31 @@ def generate_file_sizes(total_size_gb, total_files):
             if remaining_size <= 0:
                 break
             
-            # 随机增加文件大小，确保不超过一定上限（例如2GB）
-            # additional_size = min(remaining_size, random.randint(0, 2 * (1024 ** 3)))  # 每次最多增加2GB
+            # 随机增加文件大小，确保不超过一定上限（例如2MB），并保持为8的倍数
             additional_size = min(remaining_size, random.randint(0, 2 * (1024 ** 2)))
+            additional_size -= additional_size % 8  # 确保增加的大小是8的倍数
+            
             sizes[i] += additional_size
             remaining_size -= additional_size
 
     # 打乱文件大小顺序以确保每个文件大小不一样
     random.shuffle(sizes)
 
+    assert remaining_size >= 0, "Remaining size should not be negative!"
+    
+    # 确保所有文件大小都是8的倍数
+    sizes = [size - (size % 8) for size in sizes]
+
     return sizes
 
-def generate_files(directory, total_size_gb, total_files):
+def generate_files(directory, total_size, total_files):
     """在指定目录中生成固定数量的文件，确保总大小达到目标且每个文件大小不一样"""
-    sizes = generate_file_sizes(total_size_gb, total_files)
+    sizes = generate_file_sizes(total_size, total_files)
 
     # 创建文件并写入数据
     for file_count in range(total_files):
-        num_integers = int(sizes[file_count] // struct.calcsize('q')) # TODO
+        num_integers = sizes[file_count] // struct.calcsize('q')  # 确保整数数量正确
+        assert sizes[file_count] % struct.calcsize('q') == 0, "整除失败"
         data = generate_random_data(num_integers)
 
         # 创建文件路径
@@ -59,10 +66,10 @@ def generate_files(directory, total_size_gb, total_files):
         print(f"生成文件: {file_name}, 大小: {os.path.getsize(file_path)} 字节")
 
 if __name__ == "__main__":
-    output_directory = "../data"  # 指定输出目录
+    output_directory = "/home/soyo/Projects/LinuxHW/ThreadPool/data"  # 指定输出目录
     os.makedirs(output_directory, exist_ok=True)
     
-    target_size_gb = 0.1  # 目标大小为128GB
-    total_files = 100  # 文件数量为10万个
+    target_size = 100 * 1024 * 1024  # 目标大小
+    total_files = 100  # 文件数量
     
-    generate_files(output_directory, target_size_gb, total_files)
+    generate_files(output_directory, target_size, total_files)

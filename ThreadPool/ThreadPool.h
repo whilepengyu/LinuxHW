@@ -6,7 +6,7 @@
 #include <atomic>
 #include <functional>
 #include "LockFreeQueue.hpp"
-#include "ThreadWithHeap.h"
+#include "Heap.h"
 
 // 线程池类
 class ThreadPool {
@@ -17,13 +17,14 @@ public:
     ThreadPool(size_t threads); // 构造函数
     ~ThreadPool(); // 析构函数
 
-    void addTask(std::function<void(size_t)> func);
-    ThreadWithHeap& getThread(size_t i);
-    bool ifstop();
+    void addTask(std::function<void()> func);
+    std::thread& getThread(size_t i);
+    bool ifStop();
+    std::vector<Heap> heaps;
 private:
-    void workerRun(size_t i); // 工作线程执行的函数
-    LockFreeQueue<std::function<void(size_t)>> taskQueue; // 无锁任务队列
-    std::vector<ThreadWithHeap> workers; // 工作线程集合
+    void workerRun(); // 工作线程执行的函数
+    LockFreeQueue<std::function<void()>> taskQueue; // 无锁任务队列
+    std::vector<std::thread> workers; // 工作线程集合
     std::atomic<bool> stop{false}; // 停止标志
 };
 
