@@ -66,7 +66,7 @@ def generate_files(directory, total_size, total_files):
         print(f"生成文件: {file_name}, 大小: {os.path.getsize(file_path)} 字节")
 
 if __name__ == "__main__":
-    output_directory = "/home/soyo/Projects/LinuxHW/ThreadPool/data"  # 指定输出目录
+    output_directory = "./data"  # 指定输出目录
     os.makedirs(output_directory, exist_ok=True)
     
     target_size = 10 * 1024 * 1024  # 目标大小

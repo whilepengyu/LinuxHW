@@ -6,10 +6,12 @@
             "type": "shell",
             "command": "g++",
             "args": [
+                "-std=c++17",
                 "-g",
                 "*.cpp",  // 包含所有 .cpp 文件
                 "-o",
-                "${fileDirname}/test"  // 指定输出文件名
+                "${fileDirname}/test",  // 指定输出文件名
+                "-pthread"  // 添加 pthread 选项
             ],
             "group": {
                 "kind": "build",

@@ -11,8 +11,10 @@
 #include <shared_mutex>
 #include <mutex>
 #include <condition_variable>
+#include <unordered_set>
 #include "ThreadPool.h"
 #include "Heap.h"
+
 namespace fs = std::filesystem;
 
 class SortManager {
@@ -47,24 +49,25 @@ private:
     void ReadToHeap(size_t i); // 把缓存数据读到堆中
     void MergeHeaps(); // 将所有线程的堆合并成一个有序的中间文件
     void MergeIntermediate(); // 将中间文件合并
-    
+    void MergeTwoIntermediate(size_t a, size_t b);
+
     fs::directory_iterator dirIter;
     fs::directory_iterator dirEndIter;
     std::ifstream fileStream;
 
     size_t totalFileSize;
+    size_t numIntermediate;
     
     //std::atomic<State> state;
     State state;
-    std::atomic<size_t> intermediateCount;
-    std::atomic<size_t> numIntermediate;
     std::atomic<size_t> readyHeapsCount;
-    std::atomic<bool> readToHeapFlag {false};
 
     std::shared_mutex cacheMutex;
     std::mutex stateMutex;
     std::mutex readyHeapsCountMutex;
-    
+    std::mutex intermediateSetMutex;
+
+    std::unordered_set<size_t> intermediateSet;
     std::condition_variable cv;
 };
 

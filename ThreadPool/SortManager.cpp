@@ -24,11 +24,9 @@ SortManager::SortManager(const std::string& dir, size_t numThread, size_t buffer
     blockSize = bufferSize / numThread; // 每个线程处理的数据块大小
     buffer = std::make_unique<long long[]>(bufferSize / sizeof(long long));
 
-    intermediateCount.store(0);
     readyHeapsCount.store(0);
-    size_t totalInter = totalFileSize / bufferSize; 
-    if(totalFileSize % bufferSize != 0) totalInter++;
-    numIntermediate.store(totalInter);
+    numIntermediate = totalFileSize / bufferSize; 
+    if(totalFileSize % bufferSize != 0) numIntermediate++;
     
     state=(State::Running);
 }
@@ -47,7 +45,6 @@ void SortManager::Run(){
             break;
         case State::ReadyToReadToHeaps:
             readyHeapsCount.store(0);
-            readToHeapFlag.store(false);
             for(size_t i = 0; i < numThread; i++){
                 size_t threadIndex = i;
                 pool.addTask([this, threadIndex]() { this->ReadToHeap(threadIndex); });
@@ -59,7 +56,8 @@ void SortManager::Run(){
             SetState(State::Running);
             break;
         case State::ReadyToMergeIntermediates:
-            // 合并中间文件
+            pool.addTask([this]() { this->MergeIntermediate(); });
+            SetState(State::Running);
             break;
         case State::Stop:
             return; // 退出循环
@@ -132,13 +130,14 @@ void SortManager::ReadToCache() {
 
 
 void SortManager::ReadToHeap(size_t i) {
-    std::cout << "ReadToHeap:" << i << std::endl;
+    std::string info = "ReadToHeap:" + std::to_string(i);
+    std::cout << info << std::endl;
     std::shared_lock<std::shared_mutex> lock(cacheMutex);
     Heap& heap = pool.heaps[i];
 
     size_t blockIndex = i;
 
-    for (size_t j = 0; j < blockSize; ++j) {
+    for (size_t j = 0; j < blockSize; j += sizeof(long long)) {
         size_t index = (blockIndex * blockSize + j) / sizeof(long long);
         if (index >= bufferSize) break;
         long long value = buffer[index];
@@ -146,7 +145,7 @@ void SortManager::ReadToHeap(size_t i) {
     }
     std::unique_lock<std::mutex> lock2(readyHeapsCountMutex);
     readyHeapsCount++;
-    std::string info = "ReadToHeap:" + std::to_string(i) + " finished";
+    info = info + " finished";
     std::cout << info << std::endl;
     if (readyHeapsCount.load() == numThread){
         std::cout << "ReadToHeap all finished" << std::endl;
@@ -171,16 +170,14 @@ void SortManager::MergeHeaps() {
     }
 
     std::string fileName = "Inter"; 
-    std::ofstream outFile(dir + fileName + std::to_string(intermediateCount) + ".bin");
+    size_t interNum = intermediateSet.size();
+    std::ofstream outFile(dir + fileName + std::to_string(interNum) + ".bin");
     if (!outFile) {
         std::cerr << "无法打开输出文件！" << std::endl;
         return;
     }
 
     size_t count = 0;
-    for (size_t i = 0; i < numThread; i++){
-        std::cout << pool.heaps[i].size() << std::endl;
-    }
     while (true) {
         long long minValue = std::numeric_limits<long long>::max();
         ssize_t minIndex = -1; // 初始化为无效索引
@@ -207,14 +204,96 @@ void SortManager::MergeHeaps() {
         count++;
     }
     outFile.write(reinterpret_cast<const char*>(buffer.get()), count * sizeof(long long));
-    intermediateCount.fetch_add(1, std::memory_order_relaxed);
+    std::unique_lock<std::mutex> lock(intermediateSetMutex);
+    intermediateSet.insert(interNum);
     outFile.close();
-    SetState(State::Stop);
     std::cout << "MergeHeapsFinished" << std::endl;
+    if(intermediateSet.size() < numIntermediate){
+        SetState(State::ReadyToReadToCache);
+        cv.notify_one();
+    }
+    else{
+        SetState(State::ReadyToMergeIntermediates);
+        cv.notify_one();
+    }
 }
 
 void SortManager::MergeIntermediate(){ // 将中间文件合并
+    std::cout << "MergeIntermediate" << std::endl;
+    std::unique_lock<std::mutex> lock(intermediateSetMutex);
+    if(intermediateSet.size() <= 1) {
+        SetState(State::Stop);
+        cv.notify_one();
+        return;
+    }
+    auto it = intermediateSet.begin();
+    size_t a = *it;
+    intermediateSet.erase(a);
+    it = intermediateSet.begin();
+    size_t b = *it;
+    intermediateSet.erase(b);
+    lock.unlock();    
+    MergeTwoIntermediate(a, b);
+}
 
+void SortManager::MergeTwoIntermediate(size_t a, size_t b){
+    if(a > b){
+        size_t t = a;
+        a = b;
+        b = t;
+    }
+    std::string file1 = "./intermediate/Inter" + std::to_string(a) + ".bin";
+    std::string file2 = "./intermediate/Inter" + std::to_string(b) + ".bin";
+    std::string outputFile = "./intermediate/inter" + std::to_string(a) + ".bin";
+    std::ifstream inFile1(file1, std::ios::binary);
+    std::ifstream inFile2(file2, std::ios::binary);
+    std::ofstream outFile(outputFile, std::ios::binary);
+
+    if (!inFile1.is_open() || !inFile2.is_open() || !outFile.is_open()) {
+        std::cerr << "无法打开文件。" << std::endl;
+        return;
+    }
+
+    long long num1, num2;
+    bool hasNum1 = (inFile1.read(reinterpret_cast<char*>(&num1), sizeof(num1)), inFile1.good());
+    bool hasNum2 = (inFile2.read(reinterpret_cast<char*>(&num2), sizeof(num2)), inFile2.good());
+
+    while (hasNum1 && hasNum2) {
+        if (num1 < num2) {
+            outFile.write(reinterpret_cast<char*>(&num1), sizeof(num1));
+            hasNum1 = (inFile1.read(reinterpret_cast<char*>(&num1), sizeof(num1)), inFile1.good());
+        } else {
+            outFile.write(reinterpret_cast<char*>(&num2), sizeof(num2));
+            hasNum2 = (inFile2.read(reinterpret_cast<char*>(&num2), sizeof(num2)), inFile2.good());
+        }
+    }
+
+    // 处理剩余的元素
+    while (hasNum1) {
+        outFile.write(reinterpret_cast<char*>(&num1), sizeof(num1));
+        hasNum1 = (inFile1.read(reinterpret_cast<char*>(&num1), sizeof(num1)), inFile1.good());
+    }
+
+    while (hasNum2) {
+        outFile.write(reinterpret_cast<char*>(&num2), sizeof(num2));
+        hasNum2 = (inFile2.read(reinterpret_cast<char*>(&num2), sizeof(num2)), inFile2.good());
+    }
+
+    // 关闭文件
+    inFile1.close();
+    inFile2.close();
+    outFile.close();
+    
+    remove(file1.c_str());
+    remove(file2.c_str());
+    std::string newName = "./intermediate/Inter" + std::to_string(a) + ".bin";
+    rename(outputFile.c_str(), newName.c_str());
+    
+    std::unique_lock<std::mutex> lock(intermediateSetMutex);
+    intermediateSet.insert(a);
+    lock.unlock();
+    SetState(State::ReadyToMergeIntermediates);
+    cv.notify_one();
 }
 
 void SortManager::SetState(State newState){
