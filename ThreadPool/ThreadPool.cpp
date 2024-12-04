@@ -9,16 +9,27 @@ ThreadPool::ThreadPool(size_t threads) {
 }
 
 void ThreadPool::addTask(std::function<void()> func){
-    taskQueue.enqueue(func);
+    std::lock_guard<std::mutex> lock(queueMutex);
+    taskQueue.push(func);
 }
 
 // 工作线程执行的函数
 void ThreadPool::workerRun() {
     while (!stop.load()) { // 检查是否需要停止
         std::function<void()> func;
-        if (taskQueue.dequeue(func)) { // 从队列中取出任务
+        {
+            std::lock_guard<std::mutex> lock(queueMutex); // 上锁以安全地访问任务队列
+            
+            if (!taskQueue.empty()) { // 从队列中取出任务
+                func = taskQueue.front();
+                taskQueue.pop();
+            }
+        }
+
+        if (func) { 
             func(); // 执行任务
-        } else {
+        } 
+        else {
             std::this_thread::yield(); // 如果队列为空，放弃当前时间片，避免忙等待
         }
     }

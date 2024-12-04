@@ -5,7 +5,8 @@
 #include <vector>
 #include <atomic>
 #include <functional>
-#include "LockFreeQueue.hpp"
+#include <queue>
+#include <mutex>
 #include "Heap.h"
 
 // 线程池类
@@ -23,9 +24,11 @@ public:
     std::vector<Heap> heaps;
 private:
     void workerRun(); // 工作线程执行的函数
-    LockFreeQueue<std::function<void()>> taskQueue; // 无锁任务队列
+    std::queue<std::function<void()>> taskQueue; // 无锁任务队列
     std::vector<std::thread> workers; // 工作线程集合
     std::atomic<bool> stop{false}; // 停止标志
+
+    std::mutex queueMutex;
 };
 
 #endif // THREADPOOL_H

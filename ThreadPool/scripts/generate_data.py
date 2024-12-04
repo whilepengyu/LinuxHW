@@ -69,7 +69,7 @@ if __name__ == "__main__":
     output_directory = "/home/soyo/Projects/LinuxHW/ThreadPool/data"  # 指定输出目录
     os.makedirs(output_directory, exist_ok=True)
     
-    target_size = 100 * 1024 * 1024  # 目标大小
-    total_files = 100  # 文件数量
+    target_size = 10 * 1024 * 1024  # 目标大小
+    total_files = 20  # 文件数量
     
     generate_files(output_directory, target_size, total_files)

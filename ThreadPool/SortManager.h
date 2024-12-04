@@ -10,9 +10,9 @@
 #include <filesystem>
 #include <shared_mutex>
 #include <mutex>
+#include <condition_variable>
 #include "ThreadPool.h"
 #include "Heap.h"
-#include "LockFreeQueue.hpp"
 namespace fs = std::filesystem;
 
 class SortManager {
@@ -35,7 +35,7 @@ private:
 private:
     ThreadPool pool; // 线程池
     size_t numThread;
-    std::shared_ptr<long long[]> buffer; // 数据缓冲区
+    std::unique_ptr<long long[]> buffer; // 数据缓冲区
     //LockFreeQueue<size_t> availableBlocks; // 用无锁队列存储 可用块在buffer中的索引
     //LockFreeQueue<size_t> unavailableBlocks; // 用无锁队列存储 不可用块在buffer中的索引
     size_t bufferSize; // buffer大小
@@ -54,13 +54,18 @@ private:
 
     size_t totalFileSize;
     
-    std::atomic<State> state;
+    //std::atomic<State> state;
+    State state;
     std::atomic<size_t> intermediateCount;
     std::atomic<size_t> numIntermediate;
     std::atomic<size_t> readyHeapsCount;
     std::atomic<bool> readToHeapFlag {false};
 
     std::shared_mutex cacheMutex;
+    std::mutex stateMutex;
+    std::mutex readyHeapsCountMutex;
+    
+    std::condition_variable cv;
 };
 
 #endif // SORTMANAGER_H

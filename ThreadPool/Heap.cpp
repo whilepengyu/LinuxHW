@@ -68,3 +68,7 @@ void Heap::heapifyDown(int index) {
 bool Heap::empty() const {
     return data.empty();                // 检查数据向量是否为空
 }
+
+size_t Heap::size() const {
+    return data.size();
+}
