@@ -1,5 +1,8 @@
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+#include <chrono>
 #include "SortManager.h"
-
 const std::string DIR_Path = "./data";
 const int NUM_THREAD = 4;
 const size_t BUFFER_SIZE = 512 * 1024;
@@ -35,9 +38,9 @@ void excute(){
 }
 
 void test() {
-    const std::string directoryPath = "./intermediate/";
+    const std::string directoryPath = "./result/";
 
-    // 遍历指定目录中的所有文件
+    // 遍历指定目录中的所有文件(一开始是为了测试中间排序结果，最后只剩一个文件也能测试)
     for (const auto& entry : std::filesystem::directory_iterator(directoryPath)) {
         if (entry.is_regular_file()) { // 确保是常规文件
             std::string filePath = entry.path().string();
@@ -52,7 +55,11 @@ void test() {
 
 
 int main() {
-    //excute();
-    test();
+    auto start = std::chrono::high_resolution_clock::now();// 开始计时
+    excute(); // 执行排序操作
+    auto end = std::chrono::high_resolution_clock::now(); // 结束计时
+    std::chrono::duration<double> duration = end - start; // 计算持续时间
+    std::cout << "excute() 执行时间: " << duration.count() << " 秒" << std::endl; // 输出执行时间
+    //test();
     return 0;
 }

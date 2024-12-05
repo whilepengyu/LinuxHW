@@ -18,9 +18,9 @@ public:
     ThreadPool(size_t threads); // 构造函数
     ~ThreadPool(); // 析构函数
 
-    void addTask(std::function<void()> func);
-    std::thread& getThread(size_t i);
-    bool ifStop();
+    void addTask(std::function<void()> func); // 添加任务
+    std::thread& getThread(size_t i); // 获取某个线程
+    bool ifStop(); // 如果停止
     std::vector<Heap> heaps;
 private:
     void workerRun(); // 工作线程执行的函数

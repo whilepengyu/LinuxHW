@@ -2,5 +2,6 @@
 *.txt
 ThreadPool/data/
 ThreadPool/intermediate/
+ThreadPool/result/
 TEMP
 test
