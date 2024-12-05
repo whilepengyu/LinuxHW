@@ -35,7 +35,7 @@ SortManager::SortManager(const std::string& dir, size_t numThread, size_t buffer
     if(totalFileSize % bufferSize != 0) numIntermediate++;
     
     buffer = std::make_unique<long long[]>(bufferSize / sizeof(long long));
-
+    buffer2 = std::make_unique<long long[]>(bufferSize / sizeof(long long));
     state = State::Running;
 
     terminate.store(0);
@@ -308,6 +308,14 @@ void SortManager::MergeTwoIntermediate(size_t a, size_t b){ // 将中间文件a�
         return;
     }
     // TODO：目前是读一个数，再写一个数。优化：先读到缓存再合并。如果是读取到buffer，则要考虑线程安全问题。如果是自己新建一个缓存，不太好控制64M的缓存大小。
+    
+    std::unique_lock<std::shared_mutex> cacheLock(cacheMutex);
+    while(1){
+        inFile1.read(reinterpret_cast<char*>(buffer.get()), bufferSize);
+        inFile2.read(reinterpret_cast<char*>(buffer2.get()), bufferSize);
+    }
+    cacheLock.unlcok();
+
     long long num1, num2;
     bool hasNum1 = (inFile1.read(reinterpret_cast<char*>(&num1), sizeof(num1)), inFile1.good());
     bool hasNum2 = (inFile2.read(reinterpret_cast<char*>(&num2), sizeof(num2)), inFile2.good());
