@@ -30,27 +30,27 @@ SortManager::SortManager(const std::string& dir, size_t numThread, size_t buffer
     }
 
     blockSize = bufferSize / numThread; // 每个线程处理的数据块大小
-    buffer = std::make_unique<long long[]>(bufferSize / sizeof(long long));
-
-    numIntermediate = totalFileSize / bufferSize;
+    
+    numIntermediate = totalFileSize / bufferSize; // 中间文件的个数
     if(totalFileSize % bufferSize != 0) numIntermediate++;
     
+    buffer = std::make_unique<long long[]>(bufferSize / sizeof(long long));
+
     state = State::Running;
 
     terminate.store(0);
     readyHeapsCount.store(0);
     runningMergeIntermediateCount.store(0);
 
-    interDir = "./intermediate/";
-
+    interDir = "./intermediate/"; // 中间文件目录
     fs::path dirPath(interDir);
-    if (!fs::exists(dirPath)) {
+    if (!fs::exists(dirPath)) { // 如果中间文件目录不存在，则创建中间目录
         if (!fs::create_directory(dirPath)) {
-            LOG("无法创建目录intermediate!\n");
+            LOG("无法创建目录：" + interDir +"\n");
             return;
         }
     }
-    else{
+    else{ // 如果中间文件目录已存在，则删除其内部的所有文件
         for (const auto& entry : fs::directory_iterator(dirPath)) {
             if (fs::is_regular_file(entry.status())) {
                 fs::remove(entry.path()); // 删除文件
@@ -62,18 +62,18 @@ SortManager::SortManager(const std::string& dir, size_t numThread, size_t buffer
 }
 
 void SortManager::Run(){
-    state=(State::ReadyToReadToCache);
+    state = State::ReadyToReadToCache;
     while(true){
         std::unique_lock<std::mutex> lock(stateMutex);
-        cvTask.wait(lock, [this]() { return state != State::Running; });
+        cvTask.wait(lock, [this]() { return state != State::Running; }); // 用条件变量控制主线程
         switch (state) {
         case State::Running:
             break;
-        case State::ReadyToReadToCache:
+        case State::ReadyToReadToCache: // 准备读数据到缓存
             pool.addTask([this]() { this->ReadToCache(); });
             SetState(State::Running);
             break;
-        case State::ReadyToReadToHeaps:
+        case State::ReadyToReadToHeaps: // 准备将缓存的数据读到堆中
             readyHeapsCount.store(0);
             for(size_t i = 0; i < numThread; i++){
                 size_t threadIndex = i;
@@ -81,11 +81,11 @@ void SortManager::Run(){
             }
             SetState(State::Running);
             break;
-        case State::ReadyToMergeHeaps:
+        case State::ReadyToMergeHeaps: // 准备合并堆
             pool.addTask([this]() { this->MergeHeaps(); });
             SetState(State::Running);
             break;
-        case State::ReadyToMergeIntermediates:{
+        case State::ReadyToMergeIntermediates:{ //准备合并中间文件
             size_t threadsToUse = std::min(numIntermediate, numThread);
             for(size_t i = 0; i < threadsToUse; i++){
                 pool.addTask([this]() { this->MergeIntermediate(); });
@@ -93,13 +93,14 @@ void SortManager::Run(){
             SetState(State::Running);
             break;
         }
-        case State::Stop:
+        case State::Stop: //停止
             return; // 退出循环
         }
     }
 }
 
-void SortManager::ReadToCache() {
+void SortManager::ReadToCache() { // 读取数据填满整块缓存
+    // TODO：分块读取，提高并发度。思路：用fileStream存储当前读取位置，要读到缓存时，用临时变量存储当前读取位置，然后挪动fileStream到下一个块的读取位置。修改fileStream时加锁。
     std::unique_lock<std::shared_mutex> lock(cacheMutex);
     LOG("ReadToCache\n");
     size_t count = 0;
@@ -116,7 +117,7 @@ void SortManager::ReadToCache() {
                 break; // 所有文件都已处理，退出循环
             }
         }
-        
+        // 获取当前文件剩余大小
         std::streampos currentPos = fileStream.tellg();
         fileStream.seekg(0, std::ios::end);
         std::streampos endPos = fileStream.tellg();
@@ -144,7 +145,6 @@ void SortManager::ReadToCache() {
             count += bytesRead;
         }
 
-
         // 检查是否到达文件末尾
         if (fileRemainingBytes - bytesRead == 0) {
             // 如果到达文件末尾，关闭当前文件流并准备读取下一个文件
@@ -163,7 +163,8 @@ void SortManager::ReadToCache() {
 }
 
 
-void SortManager::ReadToHeap(size_t i) {
+void SortManager::ReadToHeap(size_t i) { // 将缓存数据中第i块读取到对应的堆中
+    // TODO：如果能够分块读取缓存，ReadToCache和ReadToHeap可以合并，即读取完一块缓存后，直接将该块内容读到对应的堆中。
     std::string info = "ReadToHeap:" + std::to_string(i);
     LOG(info + "\n");
     std::shared_lock<std::shared_mutex> lock(cacheMutex);
@@ -191,7 +192,7 @@ void SortManager::ReadToHeap(size_t i) {
 
 
 void SortManager::MergeHeaps() {
-    // 写入到中间文件
+    // 合并堆生成中间文件
     LOG("MergeHeaps\n");
 
     std::string fileName = "Inter";
@@ -251,9 +252,10 @@ void SortManager::MergeIntermediate(){ // 将中间文件合并
         std::unique_lock<std::mutex> lock2(terminateMutex);
         terminate.store(true);
         lock.unlock();
-        cvTerminate.wait(lock2, [this]() { return runningMergeIntermediateCount.load() == 0; });
+        cvTerminate.wait(lock2, [this]() { return runningMergeIntermediateCount.load() == 0; }); //等待剩下的中间文件合并任务执行完毕
+        
         LOG("MergeIntermediateAllFinished\n\n");
-        SetState(State::Stop);
+        // 将中间文件重命名
         std::string oldName = interDir + "Inter0.bin";
         std::string newDir = "./result/";
         std::string newName = newDir + "sorted.bin";
@@ -270,6 +272,7 @@ void SortManager::MergeIntermediate(){ // 将中间文件合并
         }
         rmdir(interDir.c_str());
 
+        SetState(State::Stop);
         cvTask.notify_one();
         return;
     }
@@ -287,7 +290,7 @@ void SortManager::MergeIntermediate(){ // 将中间文件合并
     MergeTwoIntermediate(a, b);
 }
 
-void SortManager::MergeTwoIntermediate(size_t a, size_t b){
+void SortManager::MergeTwoIntermediate(size_t a, size_t b){ // 将中间文件a和中间文件b合并
     if(a > b){
         size_t t = a;
         a = b;
@@ -304,7 +307,7 @@ void SortManager::MergeTwoIntermediate(size_t a, size_t b){
         LOG("无法打开文件。\n");
         return;
     }
-
+    // TODO：目前是读一个数，再写一个数。优化：先读到缓存再合并。如果是读取到buffer，则要考虑线程安全问题。如果是自己新建一个缓存，不太好控制64M的缓存大小。
     long long num1, num2;
     bool hasNum1 = (inFile1.read(reinterpret_cast<char*>(&num1), sizeof(num1)), inFile1.good());
     bool hasNum2 = (inFile2.read(reinterpret_cast<char*>(&num2), sizeof(num2)), inFile2.good());
@@ -358,6 +361,6 @@ void SortManager::MergeTwoIntermediate(size_t a, size_t b){
     cvTask.notify_one();
 }
 
-void SortManager::SetState(State newState){
+void SortManager::SetState(State newState){ //修改当前状态
     state = newState;
 }
