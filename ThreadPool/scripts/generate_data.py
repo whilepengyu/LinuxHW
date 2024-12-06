@@ -9,13 +9,13 @@ def generate_random_data(num_integers):
 def write_file(file_path, data):
     """将数据写入指定文件"""
     with open(file_path, 'wb') as f:
-        for number in data:
-            f.write(struct.pack('q', number))  # 'q'表示64位有符号整数
-
+        packed_data = struct.pack(f'{len(data)}q', *data)  # 'q'表示64位有符号整数
+        f.write(packed_data)  # 一次性写入所有数据
+        
 def generate_file_sizes(total_size, total_files):
     """生成文件大小数组，确保总大小为目标值且每个文件大小不一样"""
     base_size_kb = 16  # 每个文件初始为16KB
-    sizes = [base_size_kb * 1024 for _ in range(total_files)]  # 初始化为10KB
+    sizes = [base_size_kb * 1024 for _ in range(total_files)]  # 初始化为16KB
 
     # 计算目标总字节数
     target_size_bytes = total_size
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     output_directory = "./data"  # 指定输出目录
     os.makedirs(output_directory, exist_ok=True)
     
-    target_size = 10 * 1024 * 1024  # 目标大小
-    total_files = 20  # 文件数量
+    target_size = 128 * 1024 * 1024 * 1024  # 目标大小
+    total_files = 100000  # 文件数量
     
     generate_files(output_directory, target_size, total_files)

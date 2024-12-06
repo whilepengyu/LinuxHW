@@ -4,9 +4,9 @@
 #include <chrono>
 #include "SortManager.h"
 const std::string DIR_Path = "./data";
-const int NUM_THREAD = 4;
-const size_t BUFFER_SIZE = 512 * 1024;
-const size_t TOTAL_FILE_SIZE = 10 * 1024 * 1024;
+const int NUM_THREAD = 8;
+const size_t BUFFER_SIZE = 64 * 1024 * 1024;
+const size_t TOTAL_FILE_SIZE = 8ULL * 1024 * 1024 * 1024;
 
 bool isSorted(const std::string& filename) {
     std::ifstream file(filename);
@@ -33,8 +33,12 @@ bool isSorted(const std::string& filename) {
     return true; // 如果顺序正确，返回 true
 }
 void excute(){
+    auto start = std::chrono::high_resolution_clock::now();// 开始计时
     SortManager manager(DIR_Path, NUM_THREAD, BUFFER_SIZE, TOTAL_FILE_SIZE);
     manager.Run();
+    auto end = std::chrono::high_resolution_clock::now(); // 结束计时
+    std::chrono::duration<double> duration = end - start; // 计算持续时间
+    std::cout << "excute() 执行时间: " << duration.count() << " 秒" << std::endl; // 输出执行时间
 }
 
 void test() {
@@ -50,16 +54,12 @@ void test() {
             }
         }
     }
-    std::cout << "所有文件中的数据按升序排列。" << std::endl;
+    std::cout << "数据按照升序排列。" << std::endl;
 }
 
 
 int main() {
-    auto start = std::chrono::high_resolution_clock::now();// 开始计时
     excute(); // 执行排序操作
-    auto end = std::chrono::high_resolution_clock::now(); // 结束计时
-    std::chrono::duration<double> duration = end - start; // 计算持续时间
-    std::cout << "excute() 执行时间: " << duration.count() << " 秒" << std::endl; // 输出执行时间
-    //test();
+    test();
     return 0;
 }

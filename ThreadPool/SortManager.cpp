@@ -307,39 +307,83 @@ void SortManager::MergeTwoIntermediate(size_t a, size_t b){ // 将中间文件a�
         LOG("无法打开文件。\n");
         return;
     }
-    // TODO：目前是读一个数，再写一个数。优化：先读到缓存再合并。如果是读取到buffer，则要考虑线程安全问题。如果是自己新建一个缓存，不太好控制64M的缓存大小。
     
+    // long long num1, num2;
+    // bool hasNum1 = (inFile1.read(reinterpret_cast<char*>(&num1), sizeof(num1)), inFile1.good());
+    // bool hasNum2 = (inFile2.read(reinterpret_cast<char*>(&num2), sizeof(num2)), inFile2.good());
+
+    // while (hasNum1 && hasNum2) {
+    //     if (num1 < num2) {
+    //         outFile.write(reinterpret_cast<char*>(&num1), sizeof(num1));
+    //         hasNum1 = (inFile1.read(reinterpret_cast<char*>(&num1), sizeof(num1)), inFile1.good());
+    //     } else {
+    //         outFile.write(reinterpret_cast<char*>(&num2), sizeof(num2));
+    //         hasNum2 = (inFile2.read(reinterpret_cast<char*>(&num2), sizeof(num2)), inFile2.good());
+    //     }
+    // }
+
+    // // 处理剩余的元素
+    // while (hasNum1) {
+    //     outFile.write(reinterpret_cast<char*>(&num1), sizeof(num1));
+    //     hasNum1 = (inFile1.read(reinterpret_cast<char*>(&num1), sizeof(num1)), inFile1.good());
+    // }
+
+    // while (hasNum2) {
+    //     outFile.write(reinterpret_cast<char*>(&num2), sizeof(num2));
+    //     hasNum2 = (inFile2.read(reinterpret_cast<char*>(&num2), sizeof(num2)), inFile2.good());
+    // }
+
     std::unique_lock<std::shared_mutex> cacheLock(cacheMutex);
-    while(1){
+    size_t idxMax = bufferSize / sizeof(long long);
+    while(!inFile1.eof() && !inFile2.eof()){
         inFile1.read(reinterpret_cast<char*>(buffer.get()), bufferSize);
         inFile2.read(reinterpret_cast<char*>(buffer2.get()), bufferSize);
-    }
-    cacheLock.unlcok();
-
-    long long num1, num2;
-    bool hasNum1 = (inFile1.read(reinterpret_cast<char*>(&num1), sizeof(num1)), inFile1.good());
-    bool hasNum2 = (inFile2.read(reinterpret_cast<char*>(&num2), sizeof(num2)), inFile2.good());
-
-    while (hasNum1 && hasNum2) {
-        if (num1 < num2) {
+        size_t idx1 = 0, idx2 = 0;
+        long long num1, num2;
+        while(idx1 < idxMax && idx2 < idxMax){
+            num1 = buffer[idx1];
+            num2 = buffer2[idx2];
+            if(num1 < num2){
+                idx1++;
+                outFile.write(reinterpret_cast<char*>(&num1), sizeof(num1));
+            }
+            else{
+                idx2++;
+                outFile.write(reinterpret_cast<char*>(&num2), sizeof(num2));
+            }
+        }
+        while(idx1 < idxMax){
+            num1 = buffer[idx1];
+            idx1++;
             outFile.write(reinterpret_cast<char*>(&num1), sizeof(num1));
-            hasNum1 = (inFile1.read(reinterpret_cast<char*>(&num1), sizeof(num1)), inFile1.good());
-        } else {
-            outFile.write(reinterpret_cast<char*>(&num2), sizeof(num2));
-            hasNum2 = (inFile2.read(reinterpret_cast<char*>(&num2), sizeof(num2)), inFile2.good());
+        }
+        while(idx2 < idxMax){
+            num2 = buffer2[idx2];
+            idx2++;
+            outFile.write(reinterpret_cast<char*>(&num1), sizeof(num2));
         }
     }
-
-    // 处理剩余的元素
-    while (hasNum1) {
-        outFile.write(reinterpret_cast<char*>(&num1), sizeof(num1));
-        hasNum1 = (inFile1.read(reinterpret_cast<char*>(&num1), sizeof(num1)), inFile1.good());
+    while(!inFile1.eof()){
+        inFile1.read(reinterpret_cast<char*>(buffer.get()), idxMax);
+        size_t idx1 = 0;
+        long long num1;
+        while(idx1 < idxMax){
+            num1 = buffer[idx1];
+            idx1++;
+            outFile.write(reinterpret_cast<char*>(&num1), sizeof(num1));
+        }
     }
-
-    while (hasNum2) {
-        outFile.write(reinterpret_cast<char*>(&num2), sizeof(num2));
-        hasNum2 = (inFile2.read(reinterpret_cast<char*>(&num2), sizeof(num2)), inFile2.good());
+    while(!inFile2.eof()){
+        inFile2.read(reinterpret_cast<char*>(buffer.get()), idxMax);
+        size_t idx2 = 0;
+        long long num2;
+        while(idx2 < idxMax){
+            num2 = buffer[idx2];
+            idx2++;
+            outFile.write(reinterpret_cast<char*>(&num2), sizeof(num2));
+        }
     }
+    cacheLock.unlock();
 
     // 关闭文件
     inFile1.close();
