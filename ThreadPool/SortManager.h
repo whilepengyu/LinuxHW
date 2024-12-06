@@ -43,8 +43,6 @@ private:
     std::unique_ptr<long long[]> buffer; // 数据缓冲区
     std::unique_ptr<long long []> buffer2;
     
-    //LockFreeQueue<size_t> availableBlocks; // 用无锁队列存储 可用块在buffer中的索引
-    //LockFreeQueue<size_t> unavailableBlocks; // 用无锁队列存储 不可用块在buffer中的索引
     size_t bufferSize; // buffer大小
     size_t blockSize; // 每个块的大小
 

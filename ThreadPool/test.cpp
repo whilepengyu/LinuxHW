@@ -44,7 +44,7 @@ void excute(){
 void test() {
     const std::string directoryPath = "./result/";
 
-    // 遍历指定目录中的所有文件(一开始是为了测试中间排序结果，最后只剩一个文件也能测试)
+    // 遍历指定目录中的所有文件(一开始是为了测试中间排序结果，最终结果只剩一个文件，也可以测试)
     for (const auto& entry : std::filesystem::directory_iterator(directoryPath)) {
         if (entry.is_regular_file()) { // 确保是常规文件
             std::string filePath = entry.path().string();

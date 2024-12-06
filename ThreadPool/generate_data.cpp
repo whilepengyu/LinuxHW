@@ -121,16 +121,16 @@ void generate_big_files(const std::string &directory, size_t total_size, size_t 
     }
 }
 
-// int main() {
-//     const std::string output_directory = "./data"; // 指定输出目录
-//     fs::create_directories(output_directory); // 创建目录
+int main() {
+    const std::string output_directory = "./data"; // 指定输出目录
+    fs::create_directories(output_directory); // 创建目录
     
-//     size_t target_size = 4ULL * 1024 * 1024 * 1024; // 目标大小
-//     size_t total_files = 1000 - 4; // 文件数量
+    size_t target_size = 4ULL * 1024 * 1024 * 1024; // 目标大小
+    size_t total_files = 1000 - 4; // 文件数量
     
-//     generate_files(output_directory, target_size, total_files);
-//     size_t big_target_size = 8ULL * 1024 * 1024 * 1024;
-//     size_t bit_total_files = 4;
-//     generate_big_files(output_directory, big_target_size, bit_total_files, total_files);
-//     return 0;
-// }
+    generate_files(output_directory, target_size, total_files);
+    size_t big_target_size = 8ULL * 1024 * 1024 * 1024;
+    size_t bit_total_files = 4;
+    generate_big_files(output_directory, big_target_size, bit_total_files, total_files);
+    return 0;
+}

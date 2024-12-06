@@ -12,10 +12,6 @@
 
 SortManager::SortManager(const std::string& dir, size_t numThread, size_t bufferSize, size_t totalFileSize)
     :pool(numThread), numThread(numThread), bufferSize(bufferSize), totalFileSize(totalFileSize) {
-    
-    // for(size_t i = 0; i < numThread; i++){
-    //     unavailableBlocks.enqueue(i);
-    // }
 
     // 初始化文件迭代器
     dirIter = fs::directory_iterator(dir);
